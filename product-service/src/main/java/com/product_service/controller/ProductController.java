@@ -86,10 +86,3 @@ public class ProductController {
         }
     }
 }
-
-//"How would you upload a file to S3?"
-
-//First I would receive the file in a controller,
-// pass it to a service layer,
-// use AWS SDK's S3Client to upload it to a bucket,
-// and then return the object URL.
