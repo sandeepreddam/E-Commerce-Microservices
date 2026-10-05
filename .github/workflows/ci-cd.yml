@@ -39,14 +39,22 @@ jobs:
             mvn clean package -DskipTests
           done
 
-      # 4. Configure AWS credentials using GitHub OIDC
+      # 4. Check GitHub OIDC context
+      - name: Check GitHub OIDC context
+        run: |
+          echo "Repository: $GITHUB_REPOSITORY"
+          echo "Ref: $GITHUB_REF"
+          echo "Branch: $GITHUB_REF_NAME"
+          echo "Event: $GITHUB_EVENT_NAME"
+
+      # 5. Configure AWS credentials using GitHub OIDC
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
           role-to-assume: arn:aws:iam::087670584144:role/GitHubActions-ECR-EKS-Role
           aws-region: ap-south-2
 
-      # 5. Create ECR repositories if they do not exist
+      # 6. Create ECR repositories if they do not exist
       - name: Create ECR repositories
         run: |
           for service in api-gateway auth-service cart-service eureka-server notification-service order-service payment-service product-service
@@ -62,12 +70,12 @@ jobs:
               --region ap-south-2
           done
 
-      # 6. Login to Amazon ECR
+      # 7. Login to Amazon ECR
       - name: Login to Amazon ECR
         id: login-ecr
         uses: aws-actions/amazon-ecr-login@v2
 
-      # 7. Build and push Docker images to ECR
+      # 8. Build and push Docker images to ECR
       - name: Build and push Docker images
         env:
           REGISTRY: ${{ steps.login-ecr.outputs.registry }}
@@ -86,31 +94,31 @@ jobs:
             docker push "$REGISTRY/$service:$IMAGE_TAG"
           done
 
-      # 8. Setup kubectl
+      # 9. Setup kubectl
       - name: Setup kubectl
         uses: azure/setup-kubectl@v4
         with:
           version: 'latest'
 
-      # 9. Configure kubectl for EKS
+      # 10. Configure kubectl for EKS
       - name: Configure kubectl for EKS
         run: |
           aws eks update-kubeconfig \
             --region ap-south-2 \
             --name ecommerce-dev-eks
 
-      # 10. Verify EKS connectivity
+      # 11. Verify EKS connectivity
       - name: Verify EKS cluster
         run: |
           kubectl cluster-info
           kubectl get nodes
 
-      # 11. Create ecommerce namespace
+      # 12. Create ecommerce namespace
       - name: Create ecommerce namespace
         run: |
           kubectl apply -f kubernetes/namespace.yaml
 
-      # 12. Create Kubernetes Secret from GitHub Secrets
+      # 13. Create Kubernetes Secret from GitHub Secrets
       - name: Create ecommerce Kubernetes Secret
         env:
           MYSQL_ROOT_PASSWORD: ${{ secrets.MYSQL_ROOT_PASSWORD }}
@@ -137,7 +145,7 @@ jobs:
             --dry-run=client \
             -o yaml | kubectl apply -f -
 
-      # 13. Update Kubernetes image tags with the Git commit SHA
+      # 14. Update Kubernetes image tags with the Git commit SHA
       - name: Update Kubernetes image tags
         env:
           IMAGE_TAG: ${{ github.sha }}
@@ -148,12 +156,12 @@ jobs:
             -type f \
             -exec sed -i "s/:latest/:${IMAGE_TAG}/g" {} +
 
-      # 14. Deploy Kubernetes manifests
+      # 15. Deploy Kubernetes manifests
       - name: Deploy Kubernetes manifests
         run: |
           kubectl apply -f kubernetes/
 
-      # 15. Wait for application rollouts
+      # 16. Wait for application rollouts
       - name: Wait for application rollouts
         run: |
           kubectl rollout status deployment/mysql -n ecommerce --timeout=180s
@@ -167,7 +175,7 @@ jobs:
           kubectl rollout status deployment/payment-service -n ecommerce --timeout=180s
           kubectl rollout status deployment/notification-service -n ecommerce --timeout=180s
 
-      # 16. Display deployment status
+      # 17. Display deployment status
       - name: Verify Kubernetes deployment
         run: |
           echo "=== Pods ==="

@@ -33,30 +33,38 @@ jobs:
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v3
 
-      # 3. Configure AWS credentials using GitHub OIDC
+      # 3. Check GitHub OIDC context
+      - name: Check GitHub OIDC context
+        run: |
+          echo "Repository: $GITHUB_REPOSITORY"
+          echo "Ref: $GITHUB_REF"
+          echo "Branch: $GITHUB_REF_NAME"
+          echo "Event: $GITHUB_EVENT_NAME"
+
+      # 4. Configure AWS credentials using GitHub OIDC
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
           role-to-assume: arn:aws:iam::087670584144:role/GitHubActions-ECR-EKS-Role
           aws-region: ap-south-2
 
-      # 4. Terraform Format Check
+      # 5. Terraform Format Check
       - name: Terraform Format Check
         run: terraform fmt -check -recursive
 
-      # 5. Terraform Init
+      # 6. Terraform Init
       - name: Terraform Init
         run: terraform init
 
-      # 6. Terraform Validate
+      # 7. Terraform Validate
       - name: Terraform Validate
         run: terraform validate
 
-      # 7. Terraform Plan
+      # 8. Terraform Plan
       - name: Terraform Plan
         run: terraform plan -out=tfplan
 
-      # 8. Terraform Apply
+      # 9. Terraform Apply
       - name: Terraform Apply
         if: github.event_name == 'workflow_dispatch'
         run: terraform apply -auto-approve tfplan
