@@ -1,0 +1,73 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: auth-service
+  namespace: ecommerce
+  labels:
+    app: auth-service
+
+spec:
+  replicas: 2
+
+  selector:
+    matchLabels:
+      app: auth-service
+
+  template:
+    metadata:
+      labels:
+        app: auth-service
+
+    spec:
+      containers:
+        - name: auth-service
+          image: 087670584144.dkr.ecr.ap-south-2.amazonaws.com/auth-service:latest
+          imagePullPolicy: Always
+
+          ports:
+            - containerPort: 8086
+
+          env:
+            - name: SPRING_DATASOURCE_URL
+              value: "jdbc:mysql://mysql:3306/auth_db?createDatabaseIfNotExist=true&useSSL=false"
+
+            - name: SPRING_DATASOURCE_USERNAME
+              value: "root"
+
+            - name: SPRING_DATASOURCE_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: ecommerce-secrets
+                  key: MYSQL_ROOT_PASSWORD
+
+            - name: EUREKA_CLIENT_SERVICEURL_DEFAULTZONE
+              value: "http://eureka-server:8761/eureka/"
+
+          resources:
+            requests:
+              cpu: "250m"
+              memory: "512Mi"
+
+            limits:
+              cpu: "500m"
+              memory: "1Gi"
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: auth-service
+  namespace: ecommerce
+  labels:
+    app: auth-service
+
+spec:
+  selector:
+    app: auth-service
+
+  ports:
+    - name: http
+      port: 8086
+      targetPort: 8086
+
+  type: ClusterIP

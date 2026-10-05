@@ -1,0 +1,62 @@
+name: Terraform Infrastructure
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'terraform/**'
+      - '.github/workflows/terraform.yml'
+
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  terraform:
+    name: Terraform
+    runs-on: ubuntu-latest
+
+    defaults:
+      run:
+        working-directory: terraform
+
+    steps:
+
+      # 1. Checkout source code
+      - name: Checkout source code
+        uses: actions/checkout@v4
+
+      # 2. Setup Terraform
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+
+      # 3. Configure AWS credentials using GitHub OIDC
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::087670584144:role/GitHubActions-ECR-EKS-Role
+          aws-region: ap-south-2
+
+      # 4. Terraform Format Check
+      - name: Terraform Format Check
+        run: terraform fmt -check -recursive
+
+      # 5. Terraform Init
+      - name: Terraform Init
+        run: terraform init
+
+      # 6. Terraform Validate
+      - name: Terraform Validate
+        run: terraform validate
+
+      # 7. Terraform Plan
+      - name: Terraform Plan
+        run: terraform plan -out=tfplan
+
+      # 8. Terraform Apply
+      - name: Terraform Apply
+        if: github.event_name == 'workflow_dispatch'
+        run: terraform apply -auto-approve tfplan

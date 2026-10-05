@@ -1,0 +1,24 @@
+# Maven build output
+target/
+*/target/
+
+# IDE files
+.idea/
+.vscode/
+*.iml
+
+# Logs
+*.log
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Terraform
+terraform/.terraform/
+terraform/*.tfstate
+terraform/*.tfstate.*
+terraform/crash.log
+terraform/crash.*.log
+terraform/*.tfvars
+terraform/*.tfvars.json

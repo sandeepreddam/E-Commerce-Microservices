@@ -1,0 +1,73 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: cart-service
+  namespace: ecommerce
+  labels:
+    app: cart-service
+
+spec:
+  replicas: 2
+
+  selector:
+    matchLabels:
+      app: cart-service
+
+  template:
+    metadata:
+      labels:
+        app: cart-service
+
+    spec:
+      containers:
+        - name: cart-service
+          image: 087670584144.dkr.ecr.ap-south-2.amazonaws.com/cart-service:latest
+          imagePullPolicy: Always
+
+          ports:
+            - containerPort: 8083
+
+          env:
+            - name: SPRING_DATASOURCE_URL
+              value: "jdbc:mysql://mysql:3306/cart_db?createDatabaseIfNotExist=true&useSSL=false"
+
+            - name: SPRING_DATASOURCE_USERNAME
+              value: "root"
+
+            - name: SPRING_DATASOURCE_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: ecommerce-secrets
+                  key: MYSQL_ROOT_PASSWORD
+
+            - name: EUREKA_CLIENT_SERVICEURL_DEFAULTZONE
+              value: "http://eureka-server:8761/eureka/"
+
+          resources:
+            requests:
+              cpu: "250m"
+              memory: "512Mi"
+
+            limits:
+              cpu: "500m"
+              memory: "1Gi"
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: cart-service
+  namespace: ecommerce
+  labels:
+    app: cart-service
+
+spec:
+  selector:
+    app: cart-service
+
+  ports:
+    - name: http
+      port: 8083
+      targetPort: 8083
+
+  type: ClusterIP

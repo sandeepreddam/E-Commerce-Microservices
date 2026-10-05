@@ -1,0 +1,76 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: order-service
+  namespace: ecommerce
+  labels:
+    app: order-service
+
+spec:
+  replicas: 2
+
+  selector:
+    matchLabels:
+      app: order-service
+
+  template:
+    metadata:
+      labels:
+        app: order-service
+
+    spec:
+      containers:
+        - name: order-service
+          image: 087670584144.dkr.ecr.ap-south-2.amazonaws.com/order-service:latest
+          imagePullPolicy: Always
+
+          ports:
+            - containerPort: 8084
+
+          env:
+            - name: SPRING_DATASOURCE_URL
+              value: "jdbc:mysql://mysql:3306/order_db?createDatabaseIfNotExist=true&useSSL=false"
+
+            - name: SPRING_DATASOURCE_USERNAME
+              value: "root"
+
+            - name: SPRING_DATASOURCE_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: ecommerce-secrets
+                  key: MYSQL_ROOT_PASSWORD
+
+            - name: EUREKA_CLIENT_SERVICEURL_DEFAULTZONE
+              value: "http://eureka-server:8761/eureka/"
+
+            - name: CART_SERVICE_URL
+              value: "http://cart-service:8083"
+
+          resources:
+            requests:
+              cpu: "250m"
+              memory: "512Mi"
+
+            limits:
+              cpu: "500m"
+              memory: "1Gi"
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: order-service
+  namespace: ecommerce
+  labels:
+    app: order-service
+
+spec:
+  selector:
+    app: order-service
+
+  ports:
+    - name: http
+      port: 8084
+      targetPort: 8084
+
+  type: ClusterIP

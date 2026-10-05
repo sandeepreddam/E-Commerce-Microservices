@@ -1,0 +1,87 @@
+
+name: E-Commerce Microservices CI/CD
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  build-and-push:
+    runs-on: ubuntu-latest
+
+    steps:
+
+      # 1. Checkout source code
+      - name: Checkout source code
+        uses: actions/checkout@v4
+
+      # 2. Setup Java 17
+      - name: Set up Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+          cache: maven
+
+      # 3. Build all microservices using Maven
+      - name: Build all microservices
+        run: |
+          for service in api-gateway auth-service cart-service eureka-server notification-service order-service payment-service product-service
+          do
+            echo "Building $service"
+            cd "$GITHUB_WORKSPACE/$service"
+            mvn clean package -DskipTests
+          done
+
+      # 4. Configure AWS credentials using GitHub OIDC
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::087670584144:role/GitHubActions-ECR-EKS-Role
+          aws-region: ap-south-2
+
+      # 5. Create ECR repositories if they do not exist
+      - name: Create ECR repositories
+        run: |
+          for service in api-gateway auth-service cart-service eureka-server notification-service order-service payment-service product-service
+          do
+            echo "Checking ECR repository: $service"
+
+            aws ecr describe-repositories \
+              --repository-names "$service" \
+              --region ap-south-2 \
+              > /dev/null 2>&1 || \
+            aws ecr create-repository \
+              --repository-name "$service" \
+              --region ap-south-2
+          done
+
+      # 6. Login to Amazon ECR
+      - name: Login to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      # 7. Build and push Docker images to ECR
+      - name: Build and push Docker images
+        env:
+          REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+          IMAGE_TAG: ${{ github.sha }}
+        run: |
+          for service in api-gateway auth-service cart-service eureka-server notification-service order-service payment-service product-service
+          do
+            echo "Building Docker image for $service"
+
+            docker build \
+              -t "$REGISTRY/$service:$IMAGE_TAG" \
+              "./$service"
+
+            echo "Pushing $service image to ECR"
+
+            docker push "$REGISTRY/$service:$IMAGE_TAG"
+          done
