@@ -1,10 +1,10 @@
-
 name: E-Commerce Microservices CI/CD
 
 on:
   push:
     branches:
       - main
+
   workflow_dispatch:
 
 permissions:
@@ -12,7 +12,7 @@ permissions:
   id-token: write
 
 jobs:
-  build-and-push:
+  build-and-deploy:
     runs-on: ubuntu-latest
 
     steps:
@@ -85,3 +85,96 @@ jobs:
 
             docker push "$REGISTRY/$service:$IMAGE_TAG"
           done
+
+      # 8. Setup kubectl
+      - name: Setup kubectl
+        uses: azure/setup-kubectl@v4
+        with:
+          version: 'latest'
+
+      # 9. Configure kubectl for EKS
+      - name: Configure kubectl for EKS
+        run: |
+          aws eks update-kubeconfig \
+            --region ap-south-2 \
+            --name ecommerce-dev-eks
+
+      # 10. Verify EKS connectivity
+      - name: Verify EKS cluster
+        run: |
+          kubectl cluster-info
+          kubectl get nodes
+
+      # 11. Create ecommerce namespace
+      - name: Create ecommerce namespace
+        run: |
+          kubectl apply -f kubernetes/namespace.yaml
+
+      # 12. Create Kubernetes Secret from GitHub Secrets
+      - name: Create ecommerce Kubernetes Secret
+        env:
+          MYSQL_ROOT_PASSWORD: ${{ secrets.MYSQL_ROOT_PASSWORD }}
+          STRIPE_SECRET_KEY: ${{ secrets.STRIPE_SECRET_KEY }}
+          STRIPE_PUBLISHABLE_KEY: ${{ secrets.STRIPE_PUBLISHABLE_KEY }}
+          GMAIL_USERNAME: ${{ secrets.GMAIL_USERNAME }}
+          GMAIL_PASSWORD: ${{ secrets.GMAIL_PASSWORD }}
+          TWILIO_ACCOUNT_SID: ${{ secrets.TWILIO_ACCOUNT_SID }}
+          TWILIO_AUTH_TOKEN: ${{ secrets.TWILIO_AUTH_TOKEN }}
+          TWILIO_PHONE_NUMBER: ${{ secrets.TWILIO_PHONE_NUMBER }}
+          TWILIO_WHATSAPP_NUMBER: ${{ secrets.TWILIO_WHATSAPP_NUMBER }}
+        run: |
+          kubectl create secret generic ecommerce-secrets \
+            --namespace ecommerce \
+            --from-literal=MYSQL_ROOT_PASSWORD="$MYSQL_ROOT_PASSWORD" \
+            --from-literal=STRIPE_SECRET_KEY="$STRIPE_SECRET_KEY" \
+            --from-literal=STRIPE_PUBLISHABLE_KEY="$STRIPE_PUBLISHABLE_KEY" \
+            --from-literal=GMAIL_USERNAME="$GMAIL_USERNAME" \
+            --from-literal=GMAIL_PASSWORD="$GMAIL_PASSWORD" \
+            --from-literal=TWILIO_ACCOUNT_SID="$TWILIO_ACCOUNT_SID" \
+            --from-literal=TWILIO_AUTH_TOKEN="$TWILIO_AUTH_TOKEN" \
+            --from-literal=TWILIO_PHONE_NUMBER="$TWILIO_PHONE_NUMBER" \
+            --from-literal=TWILIO_WHATSAPP_NUMBER="$TWILIO_WHATSAPP_NUMBER" \
+            --dry-run=client \
+            -o yaml | kubectl apply -f -
+
+      # 13. Update Kubernetes image tags with the Git commit SHA
+      - name: Update Kubernetes image tags
+        env:
+          IMAGE_TAG: ${{ github.sha }}
+        run: |
+          find kubernetes -name "*.yaml" \
+            ! -name "namespace.yaml" \
+            ! -name "secrets.yaml" \
+            -type f \
+            -exec sed -i "s/:latest/:${IMAGE_TAG}/g" {} +
+
+      # 14. Deploy Kubernetes manifests
+      - name: Deploy Kubernetes manifests
+        run: |
+          kubectl apply -f kubernetes/
+
+      # 15. Wait for application rollouts
+      - name: Wait for application rollouts
+        run: |
+          kubectl rollout status deployment/mysql -n ecommerce --timeout=180s
+          kubectl rollout status deployment/kafka -n ecommerce --timeout=180s
+          kubectl rollout status deployment/eureka-server -n ecommerce --timeout=180s
+          kubectl rollout status deployment/api-gateway -n ecommerce --timeout=180s
+          kubectl rollout status deployment/auth-service -n ecommerce --timeout=180s
+          kubectl rollout status deployment/product-service -n ecommerce --timeout=180s
+          kubectl rollout status deployment/cart-service -n ecommerce --timeout=180s
+          kubectl rollout status deployment/order-service -n ecommerce --timeout=180s
+          kubectl rollout status deployment/payment-service -n ecommerce --timeout=180s
+          kubectl rollout status deployment/notification-service -n ecommerce --timeout=180s
+
+      # 16. Display deployment status
+      - name: Verify Kubernetes deployment
+        run: |
+          echo "=== Pods ==="
+          kubectl get pods -n ecommerce
+
+          echo "=== Services ==="
+          kubectl get services -n ecommerce
+
+          echo "=== Deployments ==="
+          kubectl get deployments -n ecommerce
